@@ -1,0 +1,90 @@
+Today, we'll explore how to work with data outside of Snowflake. 
+Specifically, we'll walk through the steps of creating a stage to external files in an Azure Blob container, creating a file format for it, and then creating a view on it using data on one of my favorite topics: Assassin's Creed.
+
+We'll begin by creating a stage to the external files in an Azure Blob container, which I'll share for free.
+This will allow us to access and manipulate the data stored within the container. 
+
+Next, we'll create a file format for the data in the container, ensuring that Snowflake can properly interpret and utilize the information.
+
+Once the stage and file format are set up, we'll create a view on the data. 
+In this case, we'll focus on all Assassin's Creed games, including their release year and the name of their protagonist. 
+By the end of this process, we'll have a good view of the Assassin's Creed franchise that can be easily queried and analyzed.
+
+Let's begin by setting up the necessary components.
+
+First, we'll use the Sysadmin role and create a new database and schema.
+USE ROLE SYSADMIN;
+CREATE DATABASE IF NOT EXISTS PATRICKDB;
+CREATE SCHEMA IF NOT EXISTS PATRICKDB.ASSASSINS;
+
+Now that we have our database and schema set up, we can move on to creating the stage for the data stored in the Azure Blob container.
+CREATE STAGE PATRICKDB.ASSASSINS.AZUREBLOBSTORAGE
+URL = 'azure://patricksdata.blob.core.windows.net/assassins/';
+ 
+Once the stage is created, it's a good idea to check that it was created correctly:
+SHOW STAGES;
+
+To list all the files that exist in the stage, we can use the following command:
+LIST @AZUREBLOBSTORAGE;
+
+We can take a look at the CSV file within the container.
+SELECT $1
+FROM @AZUREBLOBSTORAGE/Assassins.csv;
+
+From this, we can see that the delimiter used in the file is ";", but also we can see that some entries have spaces before their name.
+
+To fix this, we can create a new file format that includes a TRIM_SPACE parameter set to TRUE. 
+This will remove any unwanted spaces from the data when it is loaded into Snowflake.
+CREATE OR REPLACE FILE FORMAT ASSASSIN_CSV
+TYPE = 'CSV'
+SKIP_HEADER = 1
+FIELD_DELIMITER = ';'
+TRIM_SPACE = TRUE;
+
+The TYPE parameter specifies that the file is a CSV file, the SKIP_HEADER parameter is set to 1, which will skip the first line of the file. 
+The FIELD_DELIMITER parameter is set to ";", which matches the delimiter used in the file. 
+The TRIM_SPACE parameter is set to TRUE to remove any unwanted spaces.
+
+
+In Snowflake, we can use the $ symbol to reference individual columns in a file when loading data from a stage.
+When loading data from a file in a stage, Snowflake automatically assigns a default column name to each column in the file, starting with $1 for the first column, $2 for the second column, and so on. 
+Using the $ symbol allows us to reference these automatically assigned columns in our query.
+
+In your example, we use the SELECT statement to select the columns we want to extract from the file. 
+SELECT $1 AS TITLE, $2 AS RELEASE_YEAR, $3 AS PROTAGONIST
+FROM @AZUREBLOBSTORAGE/Assassins.csv
+(FILE_FORMAT => ASSASSIN_CSV);
+
+Now that we have a working query to select the data from the file, we can create a view on top of it for easy access in the future.
+This view is a virtual table that references the data in the file, rather than storing a copy of it.
+CREATE OR REPLACE VIEW V_GAME_LIST AS
+SELECT 
+$1 AS TITLE, 
+$2 AS RELEASE_YEAR,
+$3 AS PROTAGONIST
+FROM @AZUREBLOBSTORAGE/Assassins.csv
+(FILE_FORMAT => ASSASSIN_CSV);
+
+Additionally, by creating a view, we can also apply security policies and masking rules on it so that users can only see the data that they are authorized to see.
+
+We can now easily query this view just like we would a regular table.
+SELECT * FROM V_GAME_LIST;
+
+Nice is also that when the data in the CSV file is updated, the view will reflect those changes as well. 
+This is because a view in Snowflake simply reuses the query that was used to create it, rather than storing a copy of the data. 
+So, when the view is queried, the data is queried again and the most up-to-date version is returned.
+
+This feature makes it easy to work with external data, as you don't have to worry about manually updating the data in Snowflake every time it changes. 
+Instead, the view will always provide the most current information available.
+
+There are other ways to work with data outside of Snowflake as well. 
+One example is external tables, which allow you to define a table in Snowflake that references data stored outside of Snowflake. 
+These tables can be updated manually or even automatically by Snowflake using tasks or with a bit help of the cloud providers.
+
+In future blog posts, we will for sure dive deeper into these things. Stay tuned for more updates on this topic.
+
+Thanks for reading!
+
+Greetings
+
+Patrick
